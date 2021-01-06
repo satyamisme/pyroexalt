@@ -47,6 +47,9 @@ class FileStorage(SQLiteStorage):
         if version == 2:
             with self.conn:
                 self.conn.execute("ALTER TABLE sessions ADD api_id INTEGER")
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN pts INTEGER DEFAULT(1)")
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN qts INTEGER DEFAULT(-1)")
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN seq INTEGER DEFAULT(0)")
 
             version += 1
 

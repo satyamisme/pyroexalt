@@ -81,6 +81,15 @@ class Storage:
     async def is_bot(self, value: bool = object):
         raise NotImplementedError
 
+    async def pts(self, value: int = object):
+        raise NotImplementedError
+
+    async def qts(self, value: int = object):
+        raise NotImplementedError
+
+    async def seq(self, value: int = object):
+        raise NotImplementedError
+
     async def export_session_string(self):
         packed = struct.pack(
             self.SESSION_STRING_FORMAT,
