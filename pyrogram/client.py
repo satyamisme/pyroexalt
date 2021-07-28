@@ -196,6 +196,10 @@ class Client(Methods):
             Set the maximum amount of concurrent transmissions (uploads & downloads).
             A value that is too high may result in network related issues.
             Defaults to 1.
+
+        recover_gaps (``bool``, *optional*):
+            Pass True to fetching updates that arrived while the client was offline.
+            Defaults to False.
     """
 
     APP_VERSION = f"Pyrogram {__version__}"
@@ -247,7 +251,8 @@ class Client(Methods):
         takeout: bool = None,
         sleep_threshold: int = Session.SLEEP_THRESHOLD,
         hide_password: bool = False,
-        max_concurrent_transmissions: int = MAX_CONCURRENT_TRANSMISSIONS
+        max_concurrent_transmissions: int = MAX_CONCURRENT_TRANSMISSIONS,
+        recover_gaps: bool = False
     ):
         super().__init__()
 
@@ -278,6 +283,7 @@ class Client(Methods):
         self.sleep_threshold = sleep_threshold
         self.hide_password = hide_password
         self.max_concurrent_transmissions = max_concurrent_transmissions
+        self.recover_gaps = recover_gaps
 
         self.executor = ThreadPoolExecutor(self.workers, thread_name_prefix="Handler")
 
@@ -653,7 +659,7 @@ class Client(Methods):
             else:
                 if diff.other_updates:  # The other_updates list can be empty
                     self.dispatcher.updates_queue.put_nowait((diff.other_updates[0], {}, {}))
-        elif isinstance(updates, raw.types.updates.State):
+        elif isinstance(updates, raw.types.updates.State) and self.recover_gaps:
             local_pts = await self.storage.pts()
             date = await self.storage.date()
 
