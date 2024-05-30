@@ -662,6 +662,7 @@ class Client(Methods):
         elif isinstance(updates, raw.types.updates.State) and self.recover_gaps:
             local_pts = await self.storage.pts()
             date = await self.storage.date()
+            prev_pts = 0
 
             if local_pts >= updates.pts:
                 return
@@ -671,7 +672,7 @@ class Client(Methods):
                     raw.functions.updates.GetDifference(
                         pts=local_pts,
                         date=date,
-                        qts=-1
+                        qts=0
                     )
                 )
 
@@ -688,6 +689,11 @@ class Client(Methods):
                 users = {u.id: u for u in diff.users}
                 chats = {c.id: c for c in diff.chats}
                 state = getattr(diff, "state", None) or getattr(diff, "intermediate_state", None)
+
+                # stop excecution when current pts is equal to the previous pts
+                # this is to prevent infinite loop when the server is not sending updates
+                if prev_pts == state.pts:
+                    break
 
                 for msg in diff.new_messages:
                     self.dispatcher.updates_queue.put_nowait((
