@@ -241,3 +241,12 @@ class MongoStorage(Storage):
 
     async def is_bot(self, value: bool = object):
         return await self._accessor(value)
+
+    async def pts(self, value: int = object):
+        return self._accessor(value)
+
+    async def qts(self, value: int = object):
+        return self._accessor(value)
+
+    async def seq(self, value: int = object):
+        return self._accessor(value)
