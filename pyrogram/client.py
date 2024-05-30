@@ -45,7 +45,7 @@ from pyrogram.errors import CDNFileHashMismatch
 from pyrogram.errors import (
     SessionPasswordNeeded,
     VolumeLocNotFound, ChannelPrivate,
-    BadRequest
+    BadRequest, FloodWait
 )
 from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
@@ -668,51 +668,56 @@ class Client(Methods):
                 return
 
             while True:
-                diff = await self.send(
-                    raw.functions.updates.GetDifference(
-                        pts=local_pts,
-                        date=date,
-                        qts=0
+                try:
+                    diff = await self.send(
+                        raw.functions.updates.GetDifference(
+                            pts=local_pts,
+                            date=date,
+                            qts=0
+                        )
                     )
-                )
 
-                if isinstance(diff, raw.types.updates.DifferenceEmpty):
-                    await self.storage.seq(diff.seq)
-                    await self.storage.date(diff.date)
-                    break
-                elif isinstance(diff, raw.types.updates.DifferenceTooLong):
-                    await self.storage.pts(diff.pts)
+                    if isinstance(diff, raw.types.updates.DifferenceEmpty):
+                        await self.storage.seq(diff.seq)
+                        await self.storage.date(diff.date)
+                        break
+                    elif isinstance(diff, raw.types.updates.DifferenceTooLong):
+                        await self.storage.pts(diff.pts)
+                        continue
+
+                    # Difference or DifferenceSlice
+
+                    users = {u.id: u for u in diff.users}
+                    chats = {c.id: c for c in diff.chats}
+                    state = getattr(diff, "state", None) or getattr(diff, "intermediate_state", None)
+
+                    # stop excecution when current pts is equal to the previous pts
+                    # this is to prevent infinite loop when the server is not sending updates
+                    if prev_pts == state.pts:
+                        break
+
+                    for msg in diff.new_messages:
+                        self.dispatcher.updates_queue.put_nowait((
+                            raw.types.UpdateNewMessage(
+                                message=msg,
+                                pts=state.pts,
+                                pts_count=-1
+                            ),
+                            users,
+                            chats
+                        ))
+
+                    for update in diff.other_updates:
+                        self.dispatcher.updates_queue.put_nowait((update, users, chats))
+
+                    local_pts = state.pts
+                    date = state.date
+                    await self.storage.pts(local_pts)
+                    await self.storage.date(date)
+                except FloodWait as e:
+                    await asyncio.sleep(e.x)
+                except Exception:
                     continue
-
-                # Difference or DifferenceSlice
-
-                users = {u.id: u for u in diff.users}
-                chats = {c.id: c for c in diff.chats}
-                state = getattr(diff, "state", None) or getattr(diff, "intermediate_state", None)
-
-                # stop excecution when current pts is equal to the previous pts
-                # this is to prevent infinite loop when the server is not sending updates
-                if prev_pts == state.pts:
-                    break
-
-                for msg in diff.new_messages:
-                    self.dispatcher.updates_queue.put_nowait((
-                        raw.types.UpdateNewMessage(
-                            message=msg,
-                            pts=state.pts,
-                            pts_count=-1
-                        ),
-                        users,
-                        chats
-                    ))
-
-                for update in diff.other_updates:
-                    self.dispatcher.updates_queue.put_nowait((update, users, chats))
-
-                local_pts = state.pts
-                date = state.date
-                await self.storage.pts(local_pts)
-                await self.storage.date(date)
 
                 if isinstance(diff, raw.types.updates.Difference):
                     break
